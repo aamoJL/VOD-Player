@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "VODPlayer (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "VODPlayer (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
