@@ -9,5 +9,9 @@
   mc:Ignorable="d"
   Title="VODPlayer">
 
-  <Frame x:Name="MainFrame"/>
+  <Frame x:Name="MainFrame" KeyboardAcceleratorPlacementMode="Hidden">
+    <Frame.KeyboardAccelerators>
+      <KeyboardAccelerator Key="Escape" Invoked="ExitFullScreenKeyboardAccelerator_Invoked"/>
+    </Frame.KeyboardAccelerators>
+  </Frame>
 </Window>
