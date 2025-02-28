@@ -18,4 +18,6 @@ public partial class RelayCommand(Action? execute, Func<bool>? canExecute = null
     if (CanExecute(parameter))
       _execute?.Invoke();
   }
+
+  public void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }

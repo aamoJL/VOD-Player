@@ -16,6 +16,7 @@
   
   <Page.Resources>
     <local:BoolToInvertedVisibilityConverter x:Key="BoolToInvertedVisibilityConverter" />
+    <local:StringToBrushConverter x:Key="StringToBrushConverter"/>
   </Page.Resources>
   
   <Grid Background="Transparent">
@@ -26,14 +27,37 @@
       DisplayMode="CompactInline"
       PanePlacement="Right">
       <SplitView.Pane>
-        <StackPanel Orientation="Vertical" BorderThickness="1 0 0 0" BorderBrush="{ThemeResource CircleElevationBorderBrush}">
-          <Grid Padding="10 0 10 0" Height="50" BorderThickness="0 0 0 1" BorderBrush="{ThemeResource CircleElevationBorderBrush}">
+        <Grid BorderThickness="1 0 0 0" BorderBrush="{ThemeResource CircleElevationBorderBrush}">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="50"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Grid Grid.Row="0" Padding="10 0 10 0" BorderThickness="0 0 0 1" BorderBrush="{ThemeResource CircleElevationBorderBrush}">
             <TextBlock Text="STREAM CHAT" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
             <Button Command="{x:Bind PanelOpenCommand, Mode=OneTime}" CornerRadius="0">
               <FontIcon Glyph="&#xE89F;"/>
             </Button>
           </Grid>
-        </StackPanel>
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Visible">
+            <ItemsRepeater ItemsSource="{x:Bind Comments, Mode=OneWay}" Background="AliceBlue">
+              <ItemsRepeater.ItemTemplate>
+                <DataTemplate x:DataType="local:Comment">
+                  <StackPanel Orientation="Horizontal" Padding="10 5" MinHeight="30">
+                    <TextBlock IsTextSelectionEnabled="True" local:TextBlockExtension.RemoveEmptyRuns="True">
+                      <TextBlock.Inlines>
+                        <Bold>
+                          <Run Text="{x:Bind Commenter, Mode=OneTime}" Foreground="{x:Bind Color, Converter={StaticResource StringToBrushConverter}, Mode=OneTime}"/>
+                        </Bold>
+                        <Run Text=": "/>
+                        <Run Text="{x:Bind Body, Mode=OneTime}"/>
+                      </TextBlock.Inlines>
+                    </TextBlock>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+          </ScrollViewer>
+        </Grid>
       </SplitView.Pane>
       <Grid>
         <MediaPlayerElement x:Name="MediaPlayer" AreTransportControlsEnabled="True" AutoPlay="False" Tapped="MediaPlayer_Tapped" DoubleTapped="MediaPlayer_DoubleTapped">
