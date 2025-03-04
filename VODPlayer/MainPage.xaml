@@ -16,7 +16,7 @@
   
   <Page.Resources>
     <local:BoolToInvertedVisibilityConverter x:Key="BoolToInvertedVisibilityConverter" />
-    <local:StringToBrushConverter x:Key="StringToBrushConverter"/>
+    <local:StringToBrushConverter x:Key="StringToBrushConverter" />
   </Page.Resources>
   
   <Grid Background="Transparent">
@@ -38,21 +38,15 @@
               <FontIcon Glyph="&#xE89F;"/>
             </Button>
           </Grid>
-          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Visible">
-            <ItemsRepeater ItemsSource="{x:Bind Comments, Mode=OneWay}" Background="AliceBlue">
+          <ScrollViewer x:Name="CommentsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Visible">
+            <ItemsRepeater x:Name="CommentsItemsRepeater" ItemsSource="{x:Bind Comments, Mode=OneWay}">
               <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="local:Comment">
-                  <StackPanel Orientation="Horizontal" Padding="10 5" MinHeight="30">
-                    <TextBlock IsTextSelectionEnabled="True" local:TextBlockExtension.RemoveEmptyRuns="True">
-                      <TextBlock.Inlines>
-                        <Bold>
-                          <Run Text="{x:Bind Commenter, Mode=OneTime}" Foreground="{x:Bind Color, Converter={StaticResource StringToBrushConverter}, Mode=OneTime}"/>
-                        </Bold>
-                        <Run Text=": "/>
-                        <Run Text="{x:Bind Body, Mode=OneTime}"/>
-                      </TextBlock.Inlines>
-                    </TextBlock>
-                  </StackPanel>
+                  <local:CommentContainer
+                    Commenter="{x:Bind Commenter, Mode=OneTime}"
+                    Fragments="{x:Bind Fragments, Mode=OneTime}"
+                    IsSent="{x:Bind IsSent, Mode=OneWay}"
+                    CommenterForegroundBrush="{x:Bind Color, Converter={StaticResource StringToBrushConverter}, Mode=OneTime}"/>
                 </DataTemplate>
               </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>

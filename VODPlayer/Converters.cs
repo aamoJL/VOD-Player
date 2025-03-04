@@ -1,9 +1,18 @@
-﻿using Microsoft.UI.Xaml.Data;
+﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using System;
 using Windows.UI;
 
 namespace VODPlayer;
+
+public partial class BoolToInvertedVisibilityConverter : IValueConverter
+{
+  public object Convert(object value, Type targetType, object parameter, string language)
+    => value is true ? Visibility.Collapsed : Visibility.Visible;
+
+  public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotImplementedException();
+}
 
 public partial class StringToBrushConverter : IValueConverter
 {

@@ -21,6 +21,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="CommentContainer.xaml" />
     <None Remove="MainPage.xaml" />
   </ItemGroup>
 
@@ -49,6 +50,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="CommentContainer.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="MainPage.xaml">

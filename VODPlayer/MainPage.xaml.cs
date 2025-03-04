@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -39,6 +40,8 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
   public Action? FullscreenAction { get; set; }
 
   private bool _singleTap = true; // Prevents single and double tapping event conflict
+  private int currentIndex = 0;
+  private bool _bringToView = true;
 
   public MainPage()
   {
@@ -48,51 +51,95 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
 
     DragEnter += OnDragEnter;
     Drop += OnDrop;
+
+    var timer = new DispatcherTimer() { Interval = new(0, 0, 2) };
+
+    timer.Tick += Timer_Tick;
+    timer.Start();
   }
 
   [NotNull] public ICommand? PanelOpenCommand => field ??= new RelayCommand(execute: () => { IsPaneOpen = !IsPaneOpen; });
 
   private void ChangeVideo(StorageFile video)
   {
-    MediaPlayer.Source = MediaSource.CreateFromUri(new Uri(video.Path));
+    try
+    {
+      var videoFilePath = video.Path;
 
-    var chatFilePath = Mp4SuffixRegex().Replace(video.Path, ".json");
+      if (!File.Exists(videoFilePath))
+        throw new Exception("Video file was not found");
 
-    if (!File.Exists(chatFilePath))
+      MediaPlayer.Source = MediaSource.CreateFromUri(new Uri(video.Path));
+    }
+    catch (Exception ex)
+    {
+      MediaPlayer.Source = null;
+
+      Debug.WriteLine(ex.Message);
       return;
-
-    var list = new List<Comment>();
+    }
 
     try
     {
-      if (JsonNode.Parse(File.ReadAllText(chatFilePath))?["comments"]?.AsArray() is not JsonArray commentsJson)
-        return;
+      var chatFilePath = Mp4SuffixRegex().Replace(video.Path, ".json");
 
-      foreach (var commentJson in commentsJson)
+      if (!File.Exists(chatFilePath))
+        throw new Exception("Comments file was not found");
+
+      if (JsonNode.Parse(File.ReadAllText(chatFilePath)) is not JsonNode chatJson)
+        throw new Exception("No comments found");
+
+      Comments = ParseComments(chatJson);
+    }
+    catch (Exception ex)
+    {
+      Comments = [];
+
+      Debug.WriteLine(ex.Message);
+    }
+    finally
+    {
+      currentIndex = 0;
+    }
+  }
+
+  private static List<Comment> ParseComments(JsonNode json)
+  {
+    if (json?["comments"]?.AsArray() is not JsonArray commentsJson)
+    {
+      Debug.WriteLine("Json does not have comments");
+      return [];
+    }
+
+    var list = new List<Comment>() { Capacity = commentsJson.Count };
+
+    foreach (var commentJson in commentsJson)
+    {
+      try
       {
         var commenter = commentJson?["commenter"]?["display_name"]?.GetValue<string>();
+        var color = commentJson?["message"]?["user_color"]?.GetValue<string>();
         var fragments = commentJson?["message"]?["fragments"]?.AsArray().Select(fragment =>
         {
           return fragment?["text"]?.GetValue<string>() is string text ? new Comment.Fragment() { Text = text } : null;
         }).OfType<Comment.Fragment>();
-        var color = commentJson?["message"]?["user_color"]?.GetValue<string>();
+        var offsetSeconds = commentJson?["content_offset_seconds"]?.GetValue<uint>();
 
-        if (string.IsNullOrEmpty(commenter) || fragments?.Any() is not true)
-          return;
-
-        var comment = new Comment()
+        list.Add(new Comment()
         {
-          Commenter = commenter,
-          Fragments = fragments.ToArray(),
-          Color = color ?? "#FF0000"
-        };
-
-        list.Add(comment);
+          Commenter = commenter ?? throw new Exception("Commenter is null"),
+          Fragments = fragments?.ToArray() ?? throw new Exception("Fragments is null"),
+          OffsetSeconds = offsetSeconds ?? throw new Exception("Offset is null"),
+          Color = color ?? "#FF0000",
+        });
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine(ex.Message);
       }
     }
-    catch { }
 
-    Comments = list;
+    return list;
   }
 
   protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -105,6 +152,61 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
         ChangeVideo(await StorageFile.GetFileFromPathAsync(filePath));
     }
     catch { }
+  }
+
+  private void Timer_Tick(object? sender, object e)
+  {
+    if (Comments.Count <= 0)
+      return;
+
+    if (currentIndex > Comments.Count)
+      currentIndex = Comments.Count - 1;
+
+    var startIndex = currentIndex;
+    var positionSeconds = (uint)MediaPlayer.MediaPlayer.Position.TotalSeconds;
+    var lastMessageSeconds = currentIndex != -1 ? Comments[currentIndex].OffsetSeconds : 0;
+
+    if (positionSeconds > lastMessageSeconds)
+    {
+      // Forward
+      for (var i = currentIndex; i < Comments.Count; i++)
+      {
+        if (Comments[i].OffsetSeconds <= positionSeconds)
+        {
+          Comments[i].IsSent = true;
+          currentIndex = i;
+        }
+        else
+          break;
+      }
+    }
+    else
+    {
+      // Backwards
+      for (var i = currentIndex; i >= 0; i--)
+      {
+        if (Comments[i].OffsetSeconds > positionSeconds)
+        {
+          Comments[i].IsSent = false;
+          currentIndex = i;
+        }
+        else
+          break;
+      }
+    }
+
+    if (_bringToView && startIndex != currentIndex)
+    {
+      var lastElement = CommentsItemsRepeater.GetOrCreateElement(currentIndex);
+
+      CommentsItemsRepeater.UpdateLayout();
+
+      lastElement.StartBringIntoView(new()
+      {
+        AnimationDesired = true,
+        VerticalAlignmentRatio = 1f
+      });
+    }
   }
 
   private async void OnDragEnter(object sender, DragEventArgs e)
