@@ -12,7 +12,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Core;
 using Windows.Storage;
@@ -34,14 +33,23 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     get;
     set => SetProperty(ref field, value);
   } = [];
+  public bool StickyChat
+  {
+    get;
+    set
+    {
+      if (SetProperty(ref field, value))
+        StickToChatCommand.NotifyCanExecuteChanged();
+    }
+  } = true;
 
   public event PropertyChangedEventHandler? PropertyChanged;
 
   public Action? FullscreenAction { get; set; }
 
   private bool _singleTap = true; // Prevents single and double tapping event conflict
-  private int currentIndex = 0;
-  private bool _bringToView = true;
+  private int _currentCommentIndex = 0;
+  private readonly uint _bringToViewOffset = 100; // Pixel disatance where the chat will scroll automatically
 
   public MainPage()
   {
@@ -58,7 +66,16 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     timer.Start();
   }
 
-  [NotNull] public ICommand? PanelOpenCommand => field ??= new RelayCommand(execute: () => { IsPaneOpen = !IsPaneOpen; });
+  [NotNull] public RelayCommand? PanelOpenCommand => field ??= new(execute: () => { IsPaneOpen = !IsPaneOpen; });
+  [NotNull]
+  public RelayCommand? StickToChatCommand => field ??= new(execute: () =>
+  {
+    var commentElement = CommentsItemsRepeater.GetOrCreateElement(_currentCommentIndex);
+
+    CommentsItemsRepeater.UpdateLayout();
+
+    commentElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
+  }, canExecute: () => !StickyChat);
 
   private void ChangeVideo(StorageFile video)
   {
@@ -99,7 +116,7 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     }
     finally
     {
-      currentIndex = 0;
+      _currentCommentIndex = 0;
     }
   }
 
@@ -156,25 +173,43 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
 
   private void Timer_Tick(object? sender, object e)
   {
+    var updated = UpdateMessages();
+
+    if (updated && StickyChat)
+    {
+      if (CommentsItemsRepeater.TryGetElement(_currentCommentIndex) is not UIElement lastElement)
+        return;
+
+      var scrollBottomOffset = CommentsScrollViewer.VerticalOffset + CommentsScrollViewer.ActualHeight;
+      var elementOffset = lastElement.ActualOffset.Y;
+
+      if (Math.Abs(elementOffset - scrollBottomOffset) <= _bringToViewOffset)
+        lastElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
+    }
+  }
+
+  private bool UpdateMessages()
+  {
+    var startIndex = _currentCommentIndex;
+
     if (Comments.Count <= 0)
-      return;
+      return false;
 
-    if (currentIndex > Comments.Count)
-      currentIndex = Comments.Count - 1;
+    if (_currentCommentIndex > Comments.Count)
+      _currentCommentIndex = Comments.Count - 1;
 
-    var startIndex = currentIndex;
     var positionSeconds = (uint)MediaPlayer.MediaPlayer.Position.TotalSeconds;
-    var lastMessageSeconds = currentIndex != -1 ? Comments[currentIndex].OffsetSeconds : 0;
+    var lastMessageSeconds = _currentCommentIndex != -1 ? Comments[_currentCommentIndex].OffsetSeconds : 0;
 
     if (positionSeconds > lastMessageSeconds)
     {
       // Forward
-      for (var i = currentIndex; i < Comments.Count; i++)
+      for (var i = _currentCommentIndex; i < Comments.Count; i++)
       {
         if (Comments[i].OffsetSeconds <= positionSeconds)
         {
           Comments[i].IsSent = true;
-          currentIndex = i;
+          _currentCommentIndex = i;
         }
         else
           break;
@@ -183,30 +218,19 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     else
     {
       // Backwards
-      for (var i = currentIndex; i >= 0; i--)
+      for (var i = _currentCommentIndex; i >= 0; i--)
       {
         if (Comments[i].OffsetSeconds > positionSeconds)
         {
           Comments[i].IsSent = false;
-          currentIndex = i;
+          _currentCommentIndex = i;
         }
         else
           break;
       }
     }
 
-    if (_bringToView && startIndex != currentIndex)
-    {
-      var lastElement = CommentsItemsRepeater.GetOrCreateElement(currentIndex);
-
-      CommentsItemsRepeater.UpdateLayout();
-
-      lastElement.StartBringIntoView(new()
-      {
-        AnimationDesired = true,
-        VerticalAlignmentRatio = 1f
-      });
-    }
+    return startIndex != _currentCommentIndex;
   }
 
   private async void OnDragEnter(object sender, DragEventArgs e)
@@ -271,15 +295,35 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
       MediaPlayer.MediaPlayer.Play();
   }
 
-  private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+  private void CommentsScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
   {
-    if (field == null)
+    if (CommentsItemsRepeater.TryGetElement(_currentCommentIndex) is not UIElement lastElement)
+    {
+      StickyChat = false;
       return;
+    }
+
+    var scrollBottomOffset = CommentsScrollViewer.VerticalOffset + CommentsScrollViewer.ActualHeight;
+    var elementOffset = lastElement.ActualOffset.Y;
+
+    if (CommentsScrollViewer.VerticalOffset == 0 && elementOffset < CommentsScrollViewer.ActualHeight)
+      StickyChat = true;
+    else
+      StickyChat = Math.Abs(elementOffset - scrollBottomOffset) <= _bringToViewOffset;
+  }
+
+  private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+  {
+    ArgumentNullException.ThrowIfNull(field);
 
     if (!field.Equals(value))
     {
       field = value;
       PropertyChanged?.Invoke(this, new(propertyName));
+
+      return true;
     }
+
+    return false;
   }
 }

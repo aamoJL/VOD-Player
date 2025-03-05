@@ -38,19 +38,24 @@
               <FontIcon Glyph="&#xE89F;"/>
             </Button>
           </Grid>
-          <ScrollViewer x:Name="CommentsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Visible">
-            <ItemsRepeater x:Name="CommentsItemsRepeater" ItemsSource="{x:Bind Comments, Mode=OneWay}">
-              <ItemsRepeater.ItemTemplate>
-                <DataTemplate x:DataType="local:Comment">
-                  <local:CommentContainer
-                    Commenter="{x:Bind Commenter, Mode=OneTime}"
-                    Fragments="{x:Bind Fragments, Mode=OneTime}"
-                    IsSent="{x:Bind IsSent, Mode=OneWay}"
-                    CommenterForegroundBrush="{x:Bind Color, Converter={StaticResource StringToBrushConverter}, Mode=OneTime}"/>
-                </DataTemplate>
-              </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
-          </ScrollViewer>
+          <Grid Grid.Row="1">
+            <ScrollViewer x:Name="CommentsScrollViewer" VerticalScrollBarVisibility="Visible" ViewChanged="CommentsScrollViewer_ViewChanged">
+              <ItemsRepeater x:Name="CommentsItemsRepeater" ItemsSource="{x:Bind Comments, Mode=OneWay}">
+                <ItemsRepeater.ItemTemplate>
+                  <DataTemplate x:DataType="local:Comment">
+                    <local:CommentContainer
+                      Commenter="{x:Bind Commenter, Mode=OneTime}"
+                      Fragments="{x:Bind Fragments, Mode=OneTime}"
+                      IsSent="{x:Bind IsSent, Mode=OneWay}"
+                      CommenterForegroundBrush="{x:Bind Color, Converter={StaticResource StringToBrushConverter}, Mode=OneTime}"/>
+                  </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+              </ItemsRepeater>
+            </ScrollViewer>
+            <Grid Background="{ThemeResource AcrylicBackgroundFillColorBaseBrush}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="10 0 10 50">
+              <Button Command="{x:Bind StickToChatCommand, Mode=OneTime}" Visibility="{x:Bind StickyChat, Converter={StaticResource BoolToInvertedVisibilityConverter}, Mode=OneWay}" Content="Stick to chat" Padding="20 10 20 10"/>
+            </Grid>
+          </Grid>
         </Grid>
       </SplitView.Pane>
       <Grid>
