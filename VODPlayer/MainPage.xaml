@@ -11,7 +11,9 @@
   KeyboardAcceleratorPlacementMode="Hidden">
 
   <Page.KeyboardAccelerators>
-    <KeyboardAccelerator Key="Space" Invoked="MediaPlayerStateKeyboardAccelerator_Invoked" />
+    <KeyboardAccelerator Key="Space" Invoked="MediaPlayerState_KeyboardAccelerator_Invoked"/>
+    <KeyboardAccelerator Key="Right" Invoked="SeekForward_KeyboardAccelerator_Invoked"/>
+    <KeyboardAccelerator Key="Left" Invoked="SeekBackward_KeyboardAccelerator_Invoked"/>
   </Page.KeyboardAccelerators>
   
   <Page.Resources>
@@ -44,6 +46,7 @@
                 <ItemsRepeater.ItemTemplate>
                   <DataTemplate x:DataType="local:Comment">
                     <local:CommentContainer
+                      DataContext="{x:Bind Mode=OneTime}"
                       Commenter="{x:Bind Commenter, Mode=OneTime}"
                       Fragments="{x:Bind Fragments, Mode=OneTime}"
                       IsSent="{x:Bind IsSent, Mode=OneWay}"
@@ -59,9 +62,14 @@
         </Grid>
       </SplitView.Pane>
       <Grid>
-        <MediaPlayerElement x:Name="MediaPlayer" AreTransportControlsEnabled="True" AutoPlay="False" Tapped="MediaPlayer_Tapped" DoubleTapped="MediaPlayer_DoubleTapped">
+        <MediaPlayerElement 
+          x:Name="MediaPlayer" 
+          AreTransportControlsEnabled="True" 
+          AutoPlay="False"
+          Tapped="MediaPlayer_Tapped" 
+          DoubleTapped="MediaPlayer_DoubleTapped">
           <MediaPlayerElement.TransportControls>
-            <MediaTransportControls IsCompact="True"/>
+            <MediaTransportControls IsCompact="True" IsZoomButtonVisible="False" />
           </MediaPlayerElement.TransportControls>
         </MediaPlayerElement>
         <Button 

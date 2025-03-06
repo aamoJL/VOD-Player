@@ -1,5 +1,7 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
@@ -48,34 +50,43 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
   public Action? FullscreenAction { get; set; }
 
   private bool _singleTap = true; // Prevents single and double tapping event conflict
-  private int _currentCommentIndex = 0;
-  private readonly uint _bringToViewOffset = 100; // Pixel disatance where the chat will scroll automatically
+  private int _currentCommentIndex = -1;
+  private readonly uint _stickyChatOffset = 100; // Pixel distance where the chat will scroll automatically
+  private readonly DispatcherQueue _dispatcherQueue;
 
   public MainPage()
   {
     InitializeComponent();
+
+    _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+
+    var timer = new DispatcherTimer() { Interval = new(0, 0, 2) };
+    timer.Tick += Timer_Tick;
+    timer.Start();
 
     AllowDrop = true;
 
     DragEnter += OnDragEnter;
     Drop += OnDrop;
 
-    var timer = new DispatcherTimer() { Interval = new(0, 0, 2) };
+    MediaPlayer.MediaPlayer.PlaybackSession.SeekCompleted += PlaybackSession_SeekCompleted;
 
-    timer.Tick += Timer_Tick;
-    timer.Start();
+    CommentsItemsRepeater.ElementPrepared += CommentsItemsRepeater_ElementPrepared;
   }
 
   [NotNull] public RelayCommand? PanelOpenCommand => field ??= new(execute: () => { IsPaneOpen = !IsPaneOpen; });
   [NotNull]
   public RelayCommand? StickToChatCommand => field ??= new(execute: () =>
   {
-    var commentElement = CommentsItemsRepeater.GetOrCreateElement(_currentCommentIndex);
+    if (Comments.Count == 0)
+      return;
+
+    var commentElement = CommentsItemsRepeater.GetOrCreateElement(Math.Max(_currentCommentIndex, 0));
 
     CommentsItemsRepeater.UpdateLayout();
 
     commentElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
-  }, canExecute: () => !StickyChat);
+  });
 
   private void ChangeVideo(StorageFile video)
   {
@@ -116,7 +127,8 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     }
     finally
     {
-      _currentCommentIndex = 0;
+      _currentCommentIndex = -1;
+      StickToChatCommand.Execute(null);
     }
   }
 
@@ -173,43 +185,44 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
 
   private void Timer_Tick(object? sender, object e)
   {
-    var updated = UpdateMessages();
+    if (MediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
+      return;
+
+    var updated = UpdateMessages(MediaPlayer.MediaPlayer.PlaybackSession.Position);
 
     if (updated && StickyChat)
     {
-      if (CommentsItemsRepeater.TryGetElement(_currentCommentIndex) is not UIElement lastElement)
+      if (CommentsItemsRepeater.TryGetElement(Math.Max(_currentCommentIndex, 0)) is not UIElement lastElement)
         return;
 
       var scrollBottomOffset = CommentsScrollViewer.VerticalOffset + CommentsScrollViewer.ActualHeight;
       var elementOffset = lastElement.ActualOffset.Y;
 
-      if (Math.Abs(elementOffset - scrollBottomOffset) <= _bringToViewOffset)
+      if (Math.Abs(elementOffset - scrollBottomOffset) <= _stickyChatOffset)
         lastElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
     }
   }
 
-  private bool UpdateMessages()
+  private bool UpdateMessages(TimeSpan position)
   {
-    var startIndex = _currentCommentIndex;
-
-    if (Comments.Count <= 0)
+    if (Comments.Count == 0)
       return false;
 
-    if (_currentCommentIndex > Comments.Count)
-      _currentCommentIndex = Comments.Count - 1;
-
-    var positionSeconds = (uint)MediaPlayer.MediaPlayer.Position.TotalSeconds;
+    var startIndex = _currentCommentIndex;
+    var positionSeconds = (uint)position.TotalSeconds;
     var lastMessageSeconds = _currentCommentIndex != -1 ? Comments[_currentCommentIndex].OffsetSeconds : 0;
 
     if (positionSeconds > lastMessageSeconds)
     {
       // Forward
-      for (var i = _currentCommentIndex; i < Comments.Count; i++)
+      var nextIndex = _currentCommentIndex + 1;
+
+      while (nextIndex < Comments.Count)
       {
-        if (Comments[i].OffsetSeconds <= positionSeconds)
+        if (Comments[nextIndex].OffsetSeconds <= positionSeconds)
         {
-          Comments[i].IsSent = true;
-          _currentCommentIndex = i;
+          Comments[nextIndex].IsSent = true;
+          nextIndex = ++_currentCommentIndex + 1;
         }
         else
           break;
@@ -218,12 +231,12 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     else
     {
       // Backwards
-      for (var i = _currentCommentIndex; i >= 0; i--)
+      while (_currentCommentIndex >= 0)
       {
-        if (Comments[i].OffsetSeconds > positionSeconds)
+        if (Comments[_currentCommentIndex].OffsetSeconds > positionSeconds)
         {
-          Comments[i].IsSent = false;
-          _currentCommentIndex = i;
+          Comments[_currentCommentIndex].IsSent = false;
+          _currentCommentIndex--;
         }
         else
           break;
@@ -261,9 +274,9 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     def.Complete();
   }
 
-  private async void MediaPlayer_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+  private async void MediaPlayer_Tapped(object sender, TappedRoutedEventArgs e)
   {
-    if (e.OriginalSource is not (Border or FrameworkElement { Name: "RootGrid" }))
+    if (e.OriginalSource is not (Border { Name: "" } or FrameworkElement { Name: "RootGrid" }))
       return; // Prevents state change when interacting with mediaplayer controls
 
     _singleTap = true;
@@ -278,7 +291,7 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     }
   }
 
-  private void MediaPlayer_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+  private void MediaPlayer_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
   {
     _singleTap = false;
 
@@ -287,7 +300,18 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     e.Handled = true;
   }
 
-  private void MediaPlayerStateKeyboardAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+  private void PlaybackSession_SeekCompleted(Windows.Media.Playback.MediaPlaybackSession session, object args)
+  {
+    _dispatcherQueue.TryEnqueue(() =>
+    {
+      MediaPlayer.Focus(FocusState.Programmatic); // Disable focus on the timeline slider
+
+      if (UpdateMessages(session.Position))
+        StickToChatCommand.Execute(null);
+    });
+  }
+
+  private void MediaPlayerState_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
   {
     if (MediaPlayer.MediaPlayer.CurrentState == Windows.Media.Playback.MediaPlayerState.Playing)
       MediaPlayer.MediaPlayer.Pause();
@@ -295,9 +319,15 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
       MediaPlayer.MediaPlayer.Play();
   }
 
+  private void SeekForward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
+    => MediaPlayer.MediaPlayer.PlaybackSession.Position += new TimeSpan(0, 0, 5);
+
+  private void SeekBackward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
+    => MediaPlayer.MediaPlayer.PlaybackSession.Position -= new TimeSpan(0, 0, 5);
+
   private void CommentsScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
   {
-    if (CommentsItemsRepeater.TryGetElement(_currentCommentIndex) is not UIElement lastElement)
+    if (CommentsItemsRepeater.TryGetElement(Math.Max(_currentCommentIndex, 0)) is not UIElement lastElement)
     {
       StickyChat = false;
       return;
@@ -309,8 +339,33 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     if (CommentsScrollViewer.VerticalOffset == 0 && elementOffset < CommentsScrollViewer.ActualHeight)
       StickyChat = true;
     else
-      StickyChat = Math.Abs(elementOffset - scrollBottomOffset) <= _bringToViewOffset;
+      StickyChat = Math.Abs(elementOffset - scrollBottomOffset) <= _stickyChatOffset;
   }
+
+  private void CommentsItemsRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+  {
+    if (args.Element is not CommentContainer container)
+      return;
+
+    container.AddHandler(TappedEvent, new TappedEventHandler(CommentContainer_Tapped), true);
+    container.AddHandler(DoubleTappedEvent, new DoubleTappedEventHandler(CommentContainer_DoubleTapped), true);
+  }
+
+  private async void CommentContainer_Tapped(object sender, TappedRoutedEventArgs e)
+  {
+    if ((sender as FrameworkElement)?.DataContext is not Comment comment)
+      return;
+
+    _singleTap = true;
+
+    await Task.Delay(200);
+
+    if (_singleTap)
+      MediaPlayer.MediaPlayer.PlaybackSession.Position = new TimeSpan(0, 0, (int)comment.OffsetSeconds);
+  }
+
+  private void CommentContainer_DoubleTapped(object _, DoubleTappedRoutedEventArgs e)
+    => _singleTap = false;
 
   private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
   {
