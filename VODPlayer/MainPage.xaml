@@ -41,7 +41,7 @@
             </Button>
           </Grid>
           <Grid Grid.Row="1">
-            <ScrollViewer x:Name="CommentsScrollViewer" VerticalScrollBarVisibility="Visible" ViewChanged="CommentsScrollViewer_ViewChanged">
+            <ScrollViewer x:Name="CommentsScrollViewer" VerticalScrollBarVisibility="Hidden" ViewChanging="CommentsScrollViewer_ViewChanging">
               <ItemsRepeater x:Name="CommentsItemsRepeater" ItemsSource="{x:Bind Comments, Mode=OneWay}">
                 <ItemsRepeater.ItemTemplate>
                   <DataTemplate x:DataType="local:Comment">

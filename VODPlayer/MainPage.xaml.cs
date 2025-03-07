@@ -50,6 +50,7 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
   public Action? FullscreenAction { get; set; }
 
   private bool _singleTap = true; // Prevents single and double tapping event conflict
+  private bool _wheelScrolled = false; // Used to disable sticky chat when scrolling with mouse wheel
   private int _currentCommentIndex = -1;
   private readonly uint _stickyChatOffset = 100; // Pixel distance where the chat will scroll automatically
   private readonly DispatcherQueue _dispatcherQueue;
@@ -70,14 +71,16 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     Drop += OnDrop;
 
     MediaPlayer.MediaPlayer.PlaybackSession.SeekCompleted += PlaybackSession_SeekCompleted;
-
     CommentsItemsRepeater.ElementPrepared += CommentsItemsRepeater_ElementPrepared;
+    CommentsScrollViewer.AddHandler(PointerWheelChangedEvent, new PointerEventHandler(CommentsScrollViewer_PointerWheelChanged), true);
   }
 
   [NotNull] public RelayCommand? PanelOpenCommand => field ??= new(execute: () => { IsPaneOpen = !IsPaneOpen; });
   [NotNull]
   public RelayCommand? StickToChatCommand => field ??= new(execute: () =>
   {
+    StickyChat = true;
+
     if (Comments.Count == 0)
       return;
 
@@ -85,7 +88,11 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
 
     CommentsItemsRepeater.UpdateLayout();
 
-    commentElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
+    commentElement.StartBringIntoView(new()
+    {
+      AnimationDesired = false, // Using animation will make the message position very inconsistent when multiple messages has been updated
+      VerticalAlignmentRatio = 1f
+    });
   });
 
   private void ChangeVideo(StorageFile video)
@@ -132,77 +139,6 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     }
   }
 
-  private static List<Comment> ParseComments(JsonNode json)
-  {
-    if (json?["comments"]?.AsArray() is not JsonArray commentsJson)
-    {
-      Debug.WriteLine("Json does not have comments");
-      return [];
-    }
-
-    var list = new List<Comment>() { Capacity = commentsJson.Count };
-
-    foreach (var commentJson in commentsJson)
-    {
-      try
-      {
-        var commenter = commentJson?["commenter"]?["display_name"]?.GetValue<string>();
-        var color = commentJson?["message"]?["user_color"]?.GetValue<string>();
-        var fragments = commentJson?["message"]?["fragments"]?.AsArray().Select(fragment =>
-        {
-          return fragment?["text"]?.GetValue<string>() is string text ? new Comment.Fragment() { Text = text } : null;
-        }).OfType<Comment.Fragment>();
-        var offsetSeconds = commentJson?["content_offset_seconds"]?.GetValue<uint>();
-
-        list.Add(new Comment()
-        {
-          Commenter = commenter ?? throw new Exception("Commenter is null"),
-          Fragments = fragments?.ToArray() ?? throw new Exception("Fragments is null"),
-          OffsetSeconds = offsetSeconds ?? throw new Exception("Offset is null"),
-          Color = color ?? "#FF0000",
-        });
-      }
-      catch (Exception ex)
-      {
-        Debug.WriteLine(ex.Message);
-      }
-    }
-
-    return list;
-  }
-
-  protected override async void OnNavigatedTo(NavigationEventArgs e)
-  {
-    base.OnNavigatedTo(e);
-
-    try
-    {
-      if (e.Parameter is string filePath && File.Exists(filePath) && Path.GetExtension(filePath) is ".mp4")
-        ChangeVideo(await StorageFile.GetFileFromPathAsync(filePath));
-    }
-    catch { }
-  }
-
-  private void Timer_Tick(object? sender, object e)
-  {
-    if (MediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
-      return;
-
-    var updated = UpdateMessages(MediaPlayer.MediaPlayer.PlaybackSession.Position);
-
-    if (updated && StickyChat)
-    {
-      if (CommentsItemsRepeater.TryGetElement(Math.Max(_currentCommentIndex, 0)) is not UIElement lastElement)
-        return;
-
-      var scrollBottomOffset = CommentsScrollViewer.VerticalOffset + CommentsScrollViewer.ActualHeight;
-      var elementOffset = lastElement.ActualOffset.Y;
-
-      if (Math.Abs(elementOffset - scrollBottomOffset) <= _stickyChatOffset)
-        lastElement.StartBringIntoView(new() { AnimationDesired = true, VerticalAlignmentRatio = 1f });
-    }
-  }
-
   private bool UpdateMessages(TimeSpan position)
   {
     if (Comments.Count == 0)
@@ -244,6 +180,44 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
     }
 
     return startIndex != _currentCommentIndex;
+  }
+
+  private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+  {
+    ArgumentNullException.ThrowIfNull(field);
+
+    if (!field.Equals(value))
+    {
+      field = value;
+      PropertyChanged?.Invoke(this, new(propertyName));
+
+      return true;
+    }
+
+    return false;
+  }
+
+  protected override async void OnNavigatedTo(NavigationEventArgs e)
+  {
+    base.OnNavigatedTo(e);
+
+    try
+    {
+      if (e.Parameter is string filePath && File.Exists(filePath) && Path.GetExtension(filePath) is ".mp4")
+        ChangeVideo(await StorageFile.GetFileFromPathAsync(filePath));
+    }
+    catch { }
+  }
+
+  private void Timer_Tick(object? sender, object e)
+  {
+    if (MediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
+      return;
+
+    var updated = UpdateMessages(MediaPlayer.MediaPlayer.PlaybackSession.Position);
+
+    if (updated && StickyChat)
+      StickToChatCommand.Execute(null);
   }
 
   private async void OnDragEnter(object sender, DragEventArgs e)
@@ -325,23 +299,6 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
   private void SeekBackward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
     => MediaPlayer.MediaPlayer.PlaybackSession.Position -= new TimeSpan(0, 0, 5);
 
-  private void CommentsScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
-  {
-    if (CommentsItemsRepeater.TryGetElement(Math.Max(_currentCommentIndex, 0)) is not UIElement lastElement)
-    {
-      StickyChat = false;
-      return;
-    }
-
-    var scrollBottomOffset = CommentsScrollViewer.VerticalOffset + CommentsScrollViewer.ActualHeight;
-    var elementOffset = lastElement.ActualOffset.Y;
-
-    if (CommentsScrollViewer.VerticalOffset == 0 && elementOffset < CommentsScrollViewer.ActualHeight)
-      StickyChat = true;
-    else
-      StickyChat = Math.Abs(elementOffset - scrollBottomOffset) <= _stickyChatOffset;
-  }
-
   private void CommentsItemsRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
   {
     if (args.Element is not CommentContainer container)
@@ -367,18 +324,69 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
   private void CommentContainer_DoubleTapped(object _, DoubleTappedRoutedEventArgs e)
     => _singleTap = false;
 
-  private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+  private void CommentsScrollViewer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    => _wheelScrolled = true;
+
+  private void CommentsScrollViewer_ViewChanging(object sender, ScrollViewerViewChangingEventArgs e)
   {
-    ArgumentNullException.ThrowIfNull(field);
+    // Calculate sticky chat state when scrolled with mouse wheel
 
-    if (!field.Equals(value))
+    if (Comments.Count == 0 || !_wheelScrolled)
+      return;
+
+    if (CommentsItemsRepeater.TryGetElement(Math.Max(_currentCommentIndex, 0)) is not UIElement lastElement)
     {
-      field = value;
-      PropertyChanged?.Invoke(this, new(propertyName));
-
-      return true;
+      StickyChat = false;
+      return;
     }
 
-    return false;
+    var scrollBottomOffset = e.FinalView.VerticalOffset + CommentsScrollViewer.ActualHeight;
+    var elementOffset = lastElement.ActualOffset.Y + lastElement.ActualSize.Y;
+
+    if (e.FinalView.VerticalOffset == 0 && elementOffset < CommentsScrollViewer.ActualHeight)
+      StickyChat = true;
+    else
+      StickyChat = Math.Abs(elementOffset - scrollBottomOffset) <= _stickyChatOffset;
+
+    _wheelScrolled = !StickyChat;
+  }
+
+  private static List<Comment> ParseComments(JsonNode json)
+  {
+    if (json?["comments"]?.AsArray() is not JsonArray commentsJson)
+    {
+      Debug.WriteLine("Json does not have comments");
+      return [];
+    }
+
+    var list = new List<Comment>() { Capacity = commentsJson.Count };
+
+    foreach (var commentJson in commentsJson)
+    {
+      try
+      {
+        var commenter = commentJson?["commenter"]?["display_name"]?.GetValue<string>();
+        var color = commentJson?["message"]?["user_color"]?.GetValue<string>();
+        var fragments = commentJson?["message"]?["fragments"]?.AsArray().Select(fragment =>
+        {
+          return fragment?["text"]?.GetValue<string>() is string text ? new Comment.Fragment() { Text = text } : null;
+        }).OfType<Comment.Fragment>();
+        var offsetSeconds = commentJson?["content_offset_seconds"]?.GetValue<uint>();
+
+        list.Add(new Comment()
+        {
+          Commenter = commenter ?? throw new Exception("Commenter is null"),
+          Fragments = fragments?.ToArray() ?? throw new Exception("Fragments is null"),
+          OffsetSeconds = offsetSeconds ?? throw new Exception("Offset is null"),
+          Color = color ?? "#FF0000",
+        });
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine(ex.Message);
+      }
+    }
+
+    return list;
   }
 }
