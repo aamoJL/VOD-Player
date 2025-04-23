@@ -69,7 +69,10 @@
           Tapped="MediaPlayer_Tapped" 
           DoubleTapped="MediaPlayer_DoubleTapped">
           <MediaPlayerElement.TransportControls>
-            <MediaTransportControls IsCompact="True" IsZoomButtonVisible="False" />
+            <local:CustomMediaTransportControls 
+              Margin="20" 
+              PlaybackRate="{x:Bind PlaybackRate, Mode=TwoWay}"
+              FullScreenCommand="{x:Bind FullScreenCommand, Mode=OneTime}"/>
           </MediaPlayerElement.TransportControls>
         </MediaPlayerElement>
         <Button 

@@ -44,6 +44,18 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
         StickToChatCommand.NotifyCanExecuteChanged();
     }
   } = true;
+  public double PlaybackRate
+  {
+    get;
+    set
+    {
+      if (double.IsNaN(value))
+        value = 1d;
+
+      if (SetProperty(ref field, value))
+        MediaPlayer.MediaPlayer.PlaybackRate = value;
+    }
+  } = 1d;
 
   public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -94,6 +106,7 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
       VerticalAlignmentRatio = 1f
     });
   });
+  public RelayCommand? FullScreenCommand => field ??= new(execute: () => { FullscreenAction?.Invoke(); });
 
   private void ChangeVideo(StorageFile video)
   {
@@ -105,6 +118,7 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
         throw new Exception("Video file was not found");
 
       MediaPlayer.Source = MediaSource.CreateFromUri(new Uri(video.Path));
+      MediaPlayer.MediaPlayer.PlaybackRate = PlaybackRate;
     }
     catch (Exception ex)
     {
@@ -293,11 +307,19 @@ public sealed partial class MainPage : Page, INotifyPropertyChanged
       MediaPlayer.MediaPlayer.Play();
   }
 
-  private void SeekForward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
-    => MediaPlayer.MediaPlayer.PlaybackSession.Position += new TimeSpan(0, 0, 5);
+  private void SeekForward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs e)
+  {
+    MediaPlayer.MediaPlayer.PlaybackSession.Position += new TimeSpan(0, 0, 5);
 
-  private void SeekBackward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs __)
-    => MediaPlayer.MediaPlayer.PlaybackSession.Position -= new TimeSpan(0, 0, 5);
+    e.Handled = true;
+  }
+
+  private void SeekBackward_KeyboardAccelerator_Invoked(KeyboardAccelerator _, KeyboardAcceleratorInvokedEventArgs e)
+  {
+    MediaPlayer.MediaPlayer.PlaybackSession.Position -= new TimeSpan(0, 0, 5);
+
+    e.Handled = true;
+  }
 
   private void CommentsItemsRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
   {
