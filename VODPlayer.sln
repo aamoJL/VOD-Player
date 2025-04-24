@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35707.178 d17.12
+VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VODPlayer", "VODPlayer\VODPlayer.csproj", "{72104A1F-5054-42B9-A868-2815CA6B8E13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YoutubeChatConverter", "YoutubeChatConverter\YoutubeChatConverter.csproj", "{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,18 @@ Global
 		{72104A1F-5054-42B9-A868-2815CA6B8E13}.Release|x86.ActiveCfg = Release|x86
 		{72104A1F-5054-42B9-A868-2815CA6B8E13}.Release|x86.Build.0 = Release|x86
 		{72104A1F-5054-42B9-A868-2815CA6B8E13}.Release|x86.Deploy.0 = Release|x86
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|ARM64.ActiveCfg = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|ARM64.Build.0 = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|x64.Build.0 = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Debug|x86.Build.0 = Debug|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|ARM64.ActiveCfg = Release|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|ARM64.Build.0 = Release|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|x64.ActiveCfg = Release|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|x64.Build.0 = Release|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|x86.ActiveCfg = Release|Any CPU
+		{7FFDCE3A-D288-4196-97BD-CE3C8C2885F7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
