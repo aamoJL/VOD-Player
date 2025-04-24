@@ -23,6 +23,9 @@ public partial class StringToBrushConverter : IValueConverter
 
     hex = hex.TrimStart('#');
 
+    if (hex.Length != 6)
+      return new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
+
     var a = hex.Length == 8 ? byte.Parse(hex[6..8], System.Globalization.NumberStyles.HexNumber) : (byte)255;
     var r = byte.Parse(hex[..2], System.Globalization.NumberStyles.HexNumber);
     var g = byte.Parse(hex[2..4], System.Globalization.NumberStyles.HexNumber);
